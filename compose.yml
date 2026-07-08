@@ -1,0 +1,28 @@
+services:
+  claude-agent:
+    build:
+      context: .
+      args:
+        VSCODIUM_COMMIT: "${VSCODIUM_COMMIT:-}"
+    container_name: wiki-agent
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - REH_PORT=8000
+    volumes:
+      - agent-home:/home/agent
+      - ./harness/CLAUDE.md:/home/agent/CLAUDE.md:ro
+      # Obsidian vault — mount only the content dirs, never the vault's .obsidian config.
+      - ./obsidian/raw:/home/agent/obsidian/raw:ro
+      - ./obsidian/templates:/home/agent/obsidian/templates:rw
+      - ./obsidian/wiki:/home/agent/obsidian/wiki:rw
+      # Dev workspace — pulled repositories, mounted whole.
+      - ./dev:/home/agent/dev:rw
+    ports:
+      - "127.0.0.1:8000:8000"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+volumes:
+  agent-home:

@@ -1,0 +1,16 @@
+# Downloaded REH server artifacts (fetched by cook.sh)
+harness/reh/
+
+# Built resolver VSIX — regenerated deterministically by build-resolver.sh.
+*.vsix
+
+# Obsidian vault app config — the agent never touches it and it is never mounted.
+obsidian/.obsidian/
+
+# Generated wiki output — track only the directory placeholder.
+obsidian/wiki/*
+!obsidian/wiki/.gitkeep
+
+# Pulled repositories — mounted whole into the container, not part of this repo.
+dev/*
+!dev/.gitkeep

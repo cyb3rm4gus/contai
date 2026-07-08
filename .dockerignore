@@ -1,0 +1,20 @@
+# Build context = repo root, but the image only needs harness/start-reh.sh and
+# harness/reh/reh.tar.gz. Keep everything else out so the context stays small and
+# vault/dev content never leaks into image layers.
+.git
+**/*.vsix
+
+# Runtime content — bind-mounted at run time, never built in.
+obsidian
+dev
+
+# Host-side tooling and the resolver (built/installed on the desktop, not in the image).
+harness/cook.sh
+harness/cook.ps1
+harness/build-resolver.sh
+harness/build-resolver.ps1
+harness/resolver
+harness/CLAUDE.md
+
+# Only the ready-to-unpack tarball is needed; drop the versioned download.
+harness/reh/vscodium-reh-*.tar.gz

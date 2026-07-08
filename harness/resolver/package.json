@@ -1,0 +1,71 @@
+{
+  "name": "wiki-reh-resolver",
+  "displayName": "Contained claude for wiki and dev",
+  "description": "Minimal remote authority resolver: points VSCodium at the wiki-agent container's REH server on a loopback port. Zero dependencies.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.126.0"
+  },
+  "main": "./extension.js",
+  "extensionKind": [
+    "ui"
+  ],
+  "enabledApiProposals": [
+    "resolvers"
+  ],
+  "activationEvents": [
+    "onResolveRemoteAuthority:wiki-reh",
+    "onCommand:wikiReh.connect"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "wikiReh.connect",
+        "title": "Wiki REH: Connect to Container"
+      }
+    ],
+    "configuration": {
+      "title": "Wiki REH",
+      "properties": {
+        "wikiReh.hosts": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "REH targets. Each: `{ \"name\", \"host\", \"port\", \"connectionToken\", \"folders\": [{ \"name\", \"path\" }] }`.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "host": { "type": "string", "default": "localhost" },
+              "port": { "type": "number", "default": 8000 },
+              "connectionToken": { "type": "string" },
+              "folders": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string" },
+                    "path": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "resourceLabelFormatters": [
+      {
+        "scheme": "vscode-remote",
+        "authority": "wiki-reh+*",
+        "formatting": {
+          "label": "${path}",
+          "separator": "/",
+          "tildify": true,
+          "workspaceSuffix": "wiki-reh"
+        }
+      }
+    ]
+  }
+}

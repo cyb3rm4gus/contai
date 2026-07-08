@@ -1,0 +1,3 @@
+# Force LF on the files mounted into the (Linux) container so they behave
+# identically regardless of host OS — prevents CRLF sneaking in on Windows.
+* text=auto eol=lf
