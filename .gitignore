@@ -15,4 +15,4 @@ obsidian/wiki/*
 dev/*
 !dev/.gitkeep
 
-dev/*
+dev/*/**
