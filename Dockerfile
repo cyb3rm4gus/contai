@@ -17,7 +17,7 @@ ENV PATH="/home/agent/.local/bin:${PATH}"
 
 # --- VSCodium Remote Extension Host (REH) server ---
 # Kept LAST so a Codium update (new commit) only rebuilds this small layer, not
-# the apt/claude layers above. Provided by cook.sh from the official VSCodium
+# the apt/claude layers above. Provided by start.sh from the official VSCodium
 # release matching your desktop; baked in => same trust root as your editor.
 USER root
 ARG VSCODIUM_COMMIT=""

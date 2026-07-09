@@ -1,17 +1,24 @@
 #!/usr/bin/env bash
-# cook.sh — detect the host's VSCodium, fetch the matching REH server, build the
-# container image, and start it. Run from anywhere:  ./harness/cook.sh
+# start.sh — detect the host's VSCodium, fetch the matching REH server, build and
+# start the container, install our resolver, and write the desktop config so
+# there is nothing left to paste by hand. Run from anywhere:  ./harness/start.sh
+#
+# Idempotent: safe to re-run after `docker compose down -v` (the connection token
+# regenerates and this refreshes settings.json) or after a VSCodium update (the
+# REH layer rebuilds and enable-proposed-api is re-ensured).
 #
 # Overrides (rarely needed):
-#   VSCODIUM_VERSION=1.126.04524 ./cook.sh   # skip detection, pin a version
-#   CODIUM_BIN=/path/to/codium ./cook.sh     # point at a non-PATH install
-#   REH_PORT=8000 ./cook.sh                   # change the loopback port
+#   VSCODIUM_VERSION=1.126.04524 ./start.sh   # skip detection, pin a version
+#   CODIUM_BIN=/path/to/codium ./start.sh     # point at a non-PATH install
+#   REH_PORT=8000 ./start.sh                   # change the loopback port
 set -euo pipefail
 cd "$(dirname "$0")"                 # harness/
 ROOT_DIR="$(cd .. && pwd)"           # project root — compose.yml + Dockerfile live here
 
 command -v docker >/dev/null || { echo "ERROR: docker not found on PATH." >&2; exit 1; }
 PORT="${REH_PORT:-8000}"
+PYBIN="$(command -v python3 || command -v python || true)"   # enables auto-config; falls back to printed steps
+EXT_ID="local.contai-resolver"
 
 sha256_of() { # portable sha256 -> stdout
     if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1
@@ -43,7 +50,7 @@ fi
 
 if [ -z "$VER" ]; then
     echo "ERROR: could not determine Codium version. Open Codium > About to find it," >&2
-    echo "       then re-run:  VSCODIUM_VERSION=<version> ./cook.sh" >&2
+    echo "       then re-run:  VSCODIUM_VERSION=<version> ./start.sh" >&2
     exit 1
 fi
 
@@ -69,7 +76,7 @@ echo "REH sha256: ${SHA}"
 
 # ---- 3. Build + start (rebuild only when the container's REH is out of sync) ----
 export VSCODIUM_COMMIT="$COMMIT"
-CUR_COMMIT="$(docker exec wiki-agent sed -n 's/.*"commit"[: ]*"\([a-f0-9]\{40\}\)".*/\1/p' /opt/codium-reh/product.json 2>/dev/null | head -n1 || true)"
+CUR_COMMIT="$(docker exec contai sed -n 's/.*"commit"[: ]*"\([a-f0-9]\{40\}\)".*/\1/p' /opt/codium-reh/product.json 2>/dev/null | head -n1 || true)"
 if [ -n "$COMMIT" ] && [ "$CUR_COMMIT" = "$COMMIT" ]; then
     echo "Container REH already matches desktop commit ${COMMIT}; skipping rebuild."
 else
@@ -81,41 +88,67 @@ echo "Starting container..."
 REH_PORT="$PORT" docker compose -f "$ROOT_DIR/compose.yml" up -d
 
 # ---- 3b. Build + install our zero-dependency resolver into desktop Codium ----
-echo "Building and installing the Wiki REH resolver (zero deps, zip-only build)..."
+echo "Building and installing the contai resolver (zero deps, zip-only build)..."
 CODIUM_BIN="${CODIUM_BIN:-}" ./build-resolver.sh
 
-# ---- 4. Show connection details ----
+# ---- 4. Fetch the fresh token and write the desktop config ----
 echo "Waiting for the REH server to come up..."
+TOKEN=""
 for _ in $(seq 1 30); do
-    TOKEN="$(docker exec wiki-agent cat /home/agent/.vscodium-server/connection-token 2>/dev/null || true)"
+    TOKEN="$(docker exec contai cat /home/agent/.vscodium-server/connection-token 2>/dev/null || true)"
     [ -n "$TOKEN" ] && break
     sleep 1
 done
+[ -n "$TOKEN" ] || { echo "ERROR: REH server did not expose a connection token in time." >&2; exit 1; }
 
-cat <<EOF
+if [ -n "$PYBIN" ]; then
+    # build-resolver.sh (step 3b) already ensured enable-proposed-api in argv.json;
+    # here we (re)write the host entry so a fresh volume / new token just works.
+    "$PYBIN" ./host-config.py set-host \
+        --name contai --host localhost --port "$PORT" --token "$TOKEN" \
+        --folder-name agent --folder-path /home/agent
+    cat <<EOF
+
+============================================================
+ contai is up. VSCodium REH on 127.0.0.1:${PORT}; desktop is configured.
+   • resolver installed        (${EXT_ID})
+   • enable-proposed-api set    (argv.json)
+   • contai.hosts written       (settings.json, token refreshed)
+
+ If VSCodium is open, FULLY QUIT and reopen it once — argv.json changes only
+ take effect on a real restart (not "Reload Window"). Then:
+     Command Palette > 'contai: Connect to Container'
+ Sign in once (web auth); it persists in the agent-home volume.
+============================================================
+EOF
+else
+    # No python on PATH — fall back to the manual instructions.
+    cat <<EOF
 
 ============================================================
  Container is up. VSCodium REH listening on 127.0.0.1:${PORT}
- Resolver 'local.wiki-reh-resolver' installed (built here, zero deps).
+ Resolver '${EXT_ID}' installed (built here, zero deps).
+ (Install python3 to have start.sh write the two files below for you.)
 ============================================================
 One-time host setup in VSCodium:
   1. Command Palette > 'Preferences: Configure Runtime Arguments', add:
-         "enable-proposed-api": ["local.wiki-reh-resolver"]
+         "enable-proposed-api": ["${EXT_ID}"]
      then fully quit and reopen Codium.
   2. Add this to your Codium settings.json:
 
-  "wikiReh.hosts": [
+  "contai.hosts": [
     {
-      "name": "wiki-agent",
+      "name": "contai",
       "host": "localhost",
       "port": ${PORT},
-      "connectionToken": "${TOKEN:-<run: docker exec wiki-agent cat /home/agent/.vscodium-server/connection-token>}",
+      "connectionToken": "${TOKEN}",
       "folders": [ { "name": "agent", "path": "/home/agent" } ]
     }
   ]
 
-  3. Command Palette > 'Wiki REH: Connect to Container'.
+  3. Command Palette > 'contai: Connect to Container'.
      The Claude Code sidebar is already installed inside the container.
      Sign in once (web auth); it persists in the agent-home volume.
 ============================================================
 EOF
+fi

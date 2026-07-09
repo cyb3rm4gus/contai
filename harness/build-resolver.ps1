@@ -17,7 +17,7 @@ if (-not $CodiumBin) {
     if (Test-Path $lp) { $CodiumBin = $lp }
 }
 
-$Name = "wiki-reh-resolver"
+$Name = "contai-resolver"
 $Publisher = "local"
 $pkgPath = "resolver/package.json"
 $pkgText = Get-Content -Raw $pkgPath
@@ -58,7 +58,7 @@ Copy-Item "resolver/package.json","resolver/extension.js","resolver/README.md" (
   <Metadata>
     <Identity Language="en-US" Id="$Name" Version="$Version" Publisher="$Publisher"/>
     <DisplayName>Contained claude for wiki and dev</DisplayName>
-    <Description>Minimal remote authority resolver for the wiki-agent container.</Description>
+    <Description>Minimal remote authority resolver for the contai container.</Description>
     <Tags>remote</Tags>
     <Categories>Other</Categories>
   </Metadata>
@@ -99,10 +99,20 @@ if ($CodiumBin) {
     Write-Host "Codium CLI not found. Install manually: codium --install-extension `"$Out`""
 }
 
-Write-Host @"
+# Enable the proposed 'resolvers' API in argv.json (idempotent). A resolver won't
+# activate without it. Auto-written when python is available; printed otherwise.
+$Ext = "$Publisher.$Name"
+$PyCmd = Get-Command python3, python -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($PyCmd) {
+    & $PyCmd.Source (Join-Path $PSScriptRoot "host-config.py") enable-proposed-api $Ext
+    if ($LASTEXITCODE -ne 0) { Write-Host "NOTE: could not auto-edit argv.json; add `"enable-proposed-api`": [`"$Ext`"] yourself." }
+    Write-Host "Fully quit and reopen Codium once for the proposed-API change to take effect."
+} else {
+    Write-Host @"
 
 One-time: enable the proposed 'resolvers' API for this extension.
   In Codium: Command Palette > 'Preferences: Configure Runtime Arguments', add:
-      "enable-proposed-api": ["$Publisher.$Name"]
+      "enable-proposed-api": ["$Ext"]
   then fully quit and reopen Codium.
 "@
+}

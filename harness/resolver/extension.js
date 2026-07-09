@@ -1,6 +1,6 @@
-// Wiki REH Resolver — a minimal VSCodium remote authority resolver.
+// contai Resolver — a minimal VSCodium remote authority resolver.
 //
-// Its ONLY job: when the editor opens `vscode-remote://wiki-reh+<name>/...`,
+// Its ONLY job: when the editor opens `vscode-remote://contai-reh+<name>/...`,
 // tell it which host:port the container's REH server is listening on, plus the
 // connection token. No SSH, no key handling, no process spawning, no downloads.
 // That is why this file has ZERO dependencies (only the ambient `vscode` API,
@@ -9,22 +9,22 @@
 const vscode = require('vscode');
 
 function activate(context) {
-  const log = vscode.window.createOutputChannel('Wiki REH');
+  const log = vscode.window.createOutputChannel('contai');
 
   const getHosts = () =>
-    vscode.workspace.getConfiguration().get('wikiReh.hosts') || [];
+    vscode.workspace.getConfiguration().get('contai.hosts') || [];
   const findHost = (name) => getHosts().find((h) => h && h.name === name);
 
   // --- the resolver: authority -> host:port(+token) ---
   context.subscriptions.push(
-    vscode.workspace.registerRemoteAuthorityResolver('wiki-reh', {
+    vscode.workspace.registerRemoteAuthorityResolver('contai-reh', {
       resolve(authority) {
-        // authority looks like "wiki-reh+wiki-agent"
+        // authority looks like "contai-reh+contai"
         const name = authority.split('+')[1];
         const h = findHost(name);
         if (!h) {
           throw vscode.RemoteAuthorityResolverError.NotAvailable(
-            `No wikiReh.hosts entry named "${name}". Add one in settings.`,
+            `No contai.hosts entry named "${name}". Add one in settings.`,
             true
           );
         }
@@ -42,11 +42,11 @@ function activate(context) {
 
   // --- convenience command: pick a target and open its folder ---
   context.subscriptions.push(
-    vscode.commands.registerCommand('wikiReh.connect', async () => {
+    vscode.commands.registerCommand('contai.connect', async () => {
       const hosts = getHosts();
       if (!hosts.length) {
         vscode.window.showErrorMessage(
-          'Wiki REH: no hosts configured. Set "wikiReh.hosts" in settings.'
+          'contai: no hosts configured. Set "contai.hosts" in settings.'
         );
         return;
       }
@@ -63,7 +63,7 @@ function activate(context) {
         (target.folders && target.folders[0] && target.folders[0].path) ||
         '/home/agent';
       const uri = vscode.Uri.parse(
-        `vscode-remote://wiki-reh+${target.name}${folder}`
+        `vscode-remote://contai-reh+${target.name}${folder}`
       );
       await vscode.commands.executeCommand('vscode.openFolder', uri, {
         forceNewWindow: false,
@@ -71,7 +71,7 @@ function activate(context) {
     })
   );
 
-  log.appendLine('Wiki REH resolver activated.');
+  log.appendLine('contai resolver activated.');
 }
 
 function deactivate() {}

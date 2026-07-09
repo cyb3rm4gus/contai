@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 
 command -v zip >/dev/null || { echo "ERROR: 'zip' not found. Install it (e.g. apt install zip / brew install zip)." >&2; exit 1; }
 
-# locate desktop Codium (same detection as cook.sh)
+# locate desktop Codium (same detection as start.sh)
 CODIUM_BIN="${CODIUM_BIN:-}"
 if [ -z "$CODIUM_BIN" ]; then
     for c in codium codium.cmd VSCodium; do
@@ -17,7 +17,7 @@ if [ -z "$CODIUM_BIN" ] && [ -x "/Applications/VSCodium.app/Contents/Resources/a
     CODIUM_BIN="/Applications/VSCodium.app/Contents/Resources/app/bin/codium"
 fi
 
-NAME=wiki-reh-resolver
+NAME=contai-resolver
 PUBLISHER=local
 VERSION="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' resolver/package.json | head -n1)"
 OUT="$(pwd)/${NAME}-${VERSION}.vsix"
@@ -57,7 +57,7 @@ cat > "$BUILD/extension.vsixmanifest" <<XML
   <Metadata>
     <Identity Language="en-US" Id="${NAME}" Version="${VERSION}" Publisher="${PUBLISHER}"/>
     <DisplayName>Contained claude for wiki and dev</DisplayName>
-    <Description>Minimal remote authority resolver for the wiki-agent container.</Description>
+    <Description>Minimal remote authority resolver for the contai container.</Description>
     <Tags>remote</Tags>
     <Categories>Other</Categories>
   </Metadata>
@@ -84,10 +84,20 @@ else
     echo "Codium CLI not found. Install manually: codium --install-extension \"${OUT}\""
 fi
 
-cat <<EOF
+# Enable the proposed 'resolvers' API in argv.json (idempotent). A resolver won't
+# activate without it. Auto-written when python is available; printed otherwise.
+EXT="${PUBLISHER}.${NAME}"
+PYBIN="$(command -v python3 || command -v python || true)"
+if [ -n "$PYBIN" ]; then
+    "$PYBIN" ./host-config.py enable-proposed-api "$EXT" \
+        || echo "NOTE: could not auto-edit argv.json; add \"enable-proposed-api\": [\"$EXT\"] yourself."
+    echo "Fully quit and reopen Codium once for the proposed-API change to take effect."
+else
+    cat <<EOF
 
 One-time: enable the proposed 'resolvers' API for this extension.
   In Codium: Command Palette > 'Preferences: Configure Runtime Arguments', add:
-      "enable-proposed-api": ["${PUBLISHER}.${NAME}"]
+      "enable-proposed-api": ["${EXT}"]
   then fully quit and reopen Codium.
 EOF
+fi

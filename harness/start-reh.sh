@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PID 1 of the container: runs the VSCodium REH server so the desktop Codium can
-# attach. `docker exec -it wiki-agent claude` still works alongside this.
+# attach. `docker exec -it contai claude` still works alongside this.
 set -euo pipefail
 
 SERVER_DATA="${HOME}/.vscodium-server"

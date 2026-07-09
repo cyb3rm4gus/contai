@@ -1,4 +1,4 @@
-# Downloaded REH server artifacts (fetched by cook.sh)
+# Downloaded REH server artifacts (fetched by start.sh)
 harness/reh/
 
 # Built resolver VSIX — regenerated deterministically by build-resolver.sh.

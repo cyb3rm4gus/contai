@@ -27,14 +27,14 @@ It serves two separate work domains:
 ### How it works
 
 ```
-   ┌─────────────────── your machine ───────────────────┐        ┌──── Docker: wiki-agent ────┐
+   ┌─────────────────── your machine ───────────────────┐        ┌────── Docker: contai ──────┐
    │  Desktop VSCodium                                   │        │                             │
    │   └─ resolver ext "Contained claude for wiki and dev"        │  codium-server (REH) :8000  │
-   │        id: local.wiki-reh-resolver  (runs locally)  │  ⇆     │   └─ Claude Code extension  │
-   │        vscode-remote://wiki-reh+wiki-agent/… ───────┼─ ws ──▶│  /home/agent                │
+   │        id: local.contai-resolver  (runs locally)    │  ⇆     │   └─ Claude Code extension  │
+   │        vscode-remote://contai-reh+contai/… ─────────┼─ ws ──▶│  /home/agent                │
    │                                                     │ token  │   ├─ obsidian/{raw,tpl,wiki} │
    │  argv.json     → enable-proposed-api                │  127.  │   ├─ dev/                    │
-   │  settings.json → wikiReh.hosts (host, port, token)  │ 0.0.1  │   └─ CLAUDE.md (ro)          │
+   │  settings.json → contai.hosts (host, port, token)   │ 0.0.1  │   └─ CLAUDE.md (ro)          │
    └─────────────────────────────────────────────────────┘        └─────────────────────────────┘
 ```
 
@@ -45,7 +45,7 @@ It serves two separate work domains:
    one-time-installs the Claude Code extension into the `agent-home` volume, and runs
    `codium-server` on `0.0.0.0:8000` (published only to `127.0.0.1`).
 3. The **resolver extension** on the desktop maps the authority
-   `wiki-reh+wiki-agent` to `localhost:8000` + the token. It declares
+   `contai-reh+contai` to `localhost:8000` + the token. It declares
    `extensionKind: ["ui"]` so it runs locally (a resolver must run on the desktop side).
 
 ### Repository layout
@@ -65,8 +65,9 @@ contai/
 ├── dev/                  # pulled repositories  →  mounted whole at /home/agent/dev (rw)
 │
 └── harness/              # service layer (build / run / connect)
-    ├── cook.sh / cook.ps1            # one-command build+start+install (Linux/macOS · Windows)
+    ├── start.sh / start.ps1          # one command: build + start + install + configure (Linux/macOS · Windows)
     ├── build-resolver.sh / .ps1      # package the resolver VSIX with zip only (no MS/npm tooling)
+    ├── host-config.py                # writes argv.json + settings.json idempotently (zero deps, stdlib only)
     ├── start-reh.sh                  # container PID 1
     ├── CLAUDE.md                     # agent instructions, bind-mounted ro to /home/agent/CLAUDE.md
     ├── resolver/                     # the ~60-line zero-dependency resolver extension
@@ -78,56 +79,51 @@ contai/
 - **Docker** with the `docker compose` plugin, running.
 - **Desktop VSCodium** with the `codium` CLI on `PATH` (macOS app path is auto-detected).
 - **`zip`** on `PATH` (used to package the resolver VSIX).
+- **`python3`** on `PATH` (used to write the desktop config automatically). Optional — without
+  it, `start` prints the two snippets for you to paste by hand instead.
 - Works on **Linux, macOS, and Windows** — `compose.yml` is host-OS-agnostic.
 
 ### First-time setup
 
-**1. Cook it.** From the repo root:
+**1. Start it.** From the repo root:
 
 ```bash
-./harness/cook.sh          # Linux / macOS
+./harness/start.sh          # Linux / macOS
 ```
 ```powershell
-.\harness\cook.ps1         # Windows
+.\harness\start.ps1         # Windows
 ```
 
-`cook` detects your desktop VSCodium version/commit/arch, downloads the matching REH
+`start` detects your desktop VSCodium version/commit/arch, downloads the matching REH
 release, builds and starts the container (verifying the REH commit matches your desktop),
-then builds and installs the resolver into your desktop VSCodium. It finishes by printing
-your **connection token** and the exact config to paste.
+installs the resolver into your desktop VSCodium, and then **writes the host config for you**:
+it adds the resolver to `enable-proposed-api` in `argv.json` and writes the `contai.hosts`
+entry (with the current token) into your `settings.json`. Your other settings and comments are
+left intact. There is nothing to copy-paste.
 
-**2. One-time desktop config** (cook prints these with your real token):
+**2. Restart VSCodium once.** `settings.json` is picked up live, but the `argv.json` change
+(`enable-proposed-api`) only takes effect on a **full quit & reopen** — not "Reload Window".
+Do this the first time and after any VSCodium update.
 
-- **Runtime args** — Command Palette → *Preferences: Configure Runtime Arguments*
-  (`~/.vscode-oss/argv.json` on Linux), add and then **fully quit & reopen VSCodium**:
-  ```jsonc
-  "enable-proposed-api": ["local.wiki-reh-resolver"]
-  ```
-- **Settings** — add to your VSCodium `settings.json`:
-  ```jsonc
-  "wikiReh.hosts": [
-    {
-      "name": "wiki-agent",
-      "host": "localhost",
-      "port": 8000,
-      "connectionToken": "<printed by cook>",
-      "folders": [ { "name": "agent", "path": "/home/agent" } ]
-    }
-  ]
-  ```
+> Without `python3`, step 1 instead prints the `enable-proposed-api` line and the
+> `contai.hosts` block (with your real token) for you to add to `argv.json` / `settings.json`
+> manually.
 
-**3. Connect.** Command Palette → **“Wiki REH: Connect to Container.”** The window reloads
+**3. Connect.** Command Palette → **“contai: Connect to Container.”** The window reloads
 into the container; the Claude Code sidebar is already installed inside. **Sign in once**
 (web auth) — it persists in the `agent-home` volume, so you won't repeat it.
 
 ### Everyday use
 
 ```bash
-docker compose up -d                       # start (from repo root)
-docker compose down                        # stop
-docker exec -it wiki-agent claude          # a plain CLI session, no IDE
+docker compose up -d                       # start an already-built image (from repo root)
+docker compose down                        # stop (keeps the volume + token)
+docker compose down -v                     # stop and wipe the volume (token resets)
+docker exec -it contai claude              # a plain CLI session, no IDE
 ```
 
+- After `down -v`, just re-run `./harness/start.sh` — it refreshes the new token into
+  `settings.json`, so the connection keeps working with no manual edits.
 - Reconnect any time via the same *Connect to Container* command or the recent-remotes list.
 - Drop repos into `dev/` — they appear at `/home/agent/dev` inside the container.
 - The agent’s wiki work lives in `obsidian/{raw,templates,wiki}`; open `obsidian/` as an
@@ -135,9 +131,10 @@ docker exec -it wiki-agent claude          # a plain CLI session, no IDE
 
 ### Keeping it in sync with VSCodium updates
 
-When your desktop VSCodium updates, just re-run `./harness/cook.sh`. It detects the new
-commit, rebuilds **only** the small REH layer, and re-verifies that the container’s server
-matches your editor. Mismatches fail the build on purpose.
+When your desktop VSCodium updates, just re-run `./harness/start.sh`. It detects the new
+commit, rebuilds **only** the small REH layer, re-verifies that the container’s server
+matches your editor (mismatches fail the build on purpose), re-pins and reinstalls the
+resolver, and re-ensures the host config. Fully quit & reopen VSCodium afterwards.
 
 ### Overrides
 
@@ -160,9 +157,9 @@ matches your editor. Mismatches fail the build on purpose.
 
 | Symptom | Cause / fix |
 |---|---|
-| `No remote extension installed to resolve wiki-reh` | Resolver isn’t running locally. Ensure `extensionKind:["ui"]` in the installed manifest, `enable-proposed-api` is set, and VSCodium was **fully restarted** (not just “Reload Window”). |
+| `No remote extension installed to resolve contai-reh` | Resolver isn’t running locally. Ensure `extensionKind:["ui"]` in the installed manifest, `enable-proposed-api` is set, and VSCodium was **fully restarted** (not just “Reload Window”). |
 | `curl 127.0.0.1:8000` returns **403** | Normal — the REH server is token-gated. |
-| Need the token again | `docker exec wiki-agent cat /home/agent/.vscodium-server/connection-token` |
+| Need the token again | `docker exec contai cat /home/agent/.vscodium-server/connection-token` |
 | Connect command missing | You’re already inside the remote window — there’s nothing left to connect to. |
 
 ---
@@ -190,14 +187,14 @@ matches your editor. Mismatches fail the build on purpose.
 ### Как это устроено
 
 ```
-   ┌─────────────────── ваша машина ────────────────────┐        ┌──── Docker: wiki-agent ────┐
+   ┌─────────────────── ваша машина ────────────────────┐        ┌────── Docker: contai ──────┐
    │  Десктопный VSCodium                                │        │                             │
    │   └─ расширение-резолвер "Contained claude…"        │        │  codium-server (REH) :8000  │
-   │        id: local.wiki-reh-resolver  (локально)      │  ⇆     │   └─ расширение Claude Code  │
-   │        vscode-remote://wiki-reh+wiki-agent/… ───────┼─ ws ──▶│  /home/agent                │
+   │        id: local.contai-resolver  (локально)        │  ⇆     │   └─ расширение Claude Code  │
+   │        vscode-remote://contai-reh+contai/… ─────────┼─ ws ──▶│  /home/agent                │
    │                                                     │ токен  │   ├─ obsidian/{raw,tpl,wiki} │
    │  argv.json     → enable-proposed-api                │  127.  │   ├─ dev/                    │
-   │  settings.json → wikiReh.hosts (host, port, token)  │ 0.0.1  │   └─ CLAUDE.md (ro)          │
+   │  settings.json → contai.hosts (host, port, token)   │ 0.0.1  │   └─ CLAUDE.md (ro)          │
    └─────────────────────────────────────────────────────┘        └─────────────────────────────┘
 ```
 
@@ -206,7 +203,7 @@ matches your editor. Mismatches fail the build on purpose.
 2. `start-reh.sh` — это **PID 1** контейнера: заводит постоянный токен, один раз ставит
    расширение Claude Code в том `agent-home` и поднимает `codium-server` на `0.0.0.0:8000`
    (наружу торчит только на `127.0.0.1`).
-3. **Резолвер** на десктопе разбирает адрес `wiki-reh+wiki-agent` в `localhost:8000` с токеном.
+3. **Резолвер** на десктопе разбирает адрес `contai-reh+contai` в `localhost:8000` с токеном.
    У него стоит `extensionKind: ["ui"]` — иначе он уедет в контейнер, а работать должен на
    стороне десктопа.
 
@@ -227,8 +224,9 @@ contai/
 ├── dev/                  # склонированные репозитории  →  монтируется целиком в /home/agent/dev (rw)
 │
 └── harness/              # служебный слой (сборка / запуск / подключение)
-    ├── cook.sh / cook.ps1            # сборка+запуск+установка одной командой (Linux/macOS · Windows)
+    ├── start.sh / start.ps1          # одной командой: сборка + запуск + установка + настройка (Linux/macOS · Windows)
     ├── build-resolver.sh / .ps1      # упаковка VSIX резолвера только через zip (без инструментов MS/npm)
+    ├── host-config.py                # идемпотентно правит argv.json и settings.json (только stdlib, без зависимостей)
     ├── start-reh.sh                  # PID 1 контейнера
     ├── CLAUDE.md                     # инструкции агенту, монтируются ro в /home/agent/CLAUDE.md
     ├── resolver/                     # тот самый резолвер (~60 строк, без зависимостей)
@@ -240,56 +238,49 @@ contai/
 - **Docker** с плагином `docker compose`, запущенный.
 - **Десктопный VSCodium**, команда `codium` в `PATH` (на macOS путь находится сам).
 - **`zip`** в `PATH` — им пакуется VSIX резолвера.
+- **`python3`** в `PATH` — им автоматически прописывается конфиг десктопа. Необязателен: без него
+  `start` просто напечатает два фрагмента, чтобы вставить их руками.
 - Идёт на **Linux, macOS и Windows** — `compose.yml` от ОС хоста не зависит.
 
 ### Первый запуск
 
-**1. Соберите.** Из корня репозитория:
+**1. Запустите.** Из корня репозитория:
 
 ```bash
-./harness/cook.sh          # Linux / macOS
+./harness/start.sh          # Linux / macOS
 ```
 ```powershell
-.\harness\cook.ps1         # Windows
+.\harness\start.ps1         # Windows
 ```
 
-`cook` сам определит версию, коммит и архитектуру вашего VSCodium, скачает нужный REH, соберёт
-и поднимет контейнер (сверив коммит с десктопом) и поставит резолвер в редактор. В конце
-напечатает **токен** и готовый кусок конфига.
+`start` сам определит версию, коммит и архитектуру VSCodium, скачает нужный REH, соберёт и
+поднимет контейнер (сверив коммит с десктопом), поставит резолвер в редактор и **сам пропишет
+конфиг**: добавит резолвер в `enable-proposed-api` (`argv.json`) и запишет запись `contai.hosts`
+с текущим токеном в ваш `settings.json`. Остальные настройки и комментарии не трогает. Вставлять
+руками ничего не нужно.
 
-**2. Разово настроить десктоп** (cook выдаст это с вашим токеном):
+**2. Перезапустите VSCodium один раз.** `settings.json` подхватывается на лету, а вот правка
+`argv.json` (`enable-proposed-api`) применяется только при **полном закрытии и повторном запуске**
+— не через «Reload Window». Сделайте это в первый раз и после каждого обновления VSCodium.
 
-- **Аргументы запуска** — Command Palette → *Preferences: Configure Runtime Arguments*
-  (в Linux это `~/.vscode-oss/argv.json`), добавьте строку и **полностью перезапустите
-  VSCodium** (не «Reload Window», а закройте и откройте заново):
-  ```jsonc
-  "enable-proposed-api": ["local.wiki-reh-resolver"]
-  ```
-- **Настройки** — в `settings.json`:
-  ```jsonc
-  "wikiReh.hosts": [
-    {
-      "name": "wiki-agent",
-      "host": "localhost",
-      "port": 8000,
-      "connectionToken": "<из вывода cook>",
-      "folders": [ { "name": "agent", "path": "/home/agent" } ]
-    }
-  ]
-  ```
+> Без `python3` шаг 1 вместо этого напечатает строку `enable-proposed-api` и блок
+> `contai.hosts` (с настоящим токеном), чтобы вы сами добавили их в `argv.json` / `settings.json`.
 
-**3. Подключитесь.** Command Palette → **«Wiki REH: Connect to Container».** Окно перезагрузится
+**3. Подключитесь.** Command Palette → **«contai: Connect to Container».** Окно перезагрузится
 уже внутри контейнера, расширение Claude Code там стоит. **Войдите один раз** (через браузер) —
 сессия ляжет в том `agent-home`, больше вход не потребуется.
 
 ### Повседневно
 
 ```bash
-docker compose up -d                       # запуск (из корня репозитория)
-docker compose down                        # остановка
-docker exec -it wiki-agent claude          # обычная CLI-сессия, без IDE
+docker compose up -d                       # запуск собранного образа (из корня репозитория)
+docker compose down                        # остановка (том и токен сохраняются)
+docker compose down -v                     # остановка со сносом тома (токен сбрасывается)
+docker exec -it contai claude              # обычная CLI-сессия, без IDE
 ```
 
+- После `down -v` просто прогоните `./harness/start.sh` — он впишет новый токен в `settings.json`,
+  и подключение снова работает без ручной правки.
 - Переподключение — той же командой *Connect to Container* или из списка недавних.
 - Репозитории кидайте в `dev/` — внутри контейнера они окажутся в `/home/agent/dev`.
 - Вики агент собирает в `obsidian/{raw,templates,wiki}`; на хосте открывайте `obsidian/` как
@@ -297,9 +288,10 @@ docker exec -it wiki-agent claude          # обычная CLI-сессия, б
 
 ### Обновление вслед за VSCodium
 
-Обновился десктопный VSCodium — просто прогоните `./harness/cook.sh` ещё раз. Он увидит новый
-коммит, пересоберёт **только** слой REH и снова проверит, что сервер в контейнере совпал с
-редактором. Не совпал — сборка падает, и это правильно.
+Обновился десктопный VSCodium — просто прогоните `./harness/start.sh` ещё раз. Он увидит новый
+коммит, пересоберёт **только** слой REH, снова сверит сервер контейнера с редактором (не совпало —
+сборка падает, так и задумано), перепакует и переустановит резолвер и заново пропишет конфиг.
+После этого полностью закройте и откройте VSCodium.
 
 ### Переопределения
 
@@ -322,7 +314,7 @@ docker exec -it wiki-agent claude          # обычная CLI-сессия, б
 
 | Симптом | В чём дело |
 |---|---|
-| `No remote extension installed to resolve wiki-reh` | Резолвер не поднялся локально. Проверьте `extensionKind:["ui"]` в установленном манифесте, что прописан `enable-proposed-api` и что VSCodium перезапущен **полностью**, а не через «Reload Window». |
+| `No remote extension installed to resolve contai-reh` | Резолвер не поднялся локально. Проверьте `extensionKind:["ui"]` в установленном манифесте, что прописан `enable-proposed-api` и что VSCodium перезапущен **полностью**, а не через «Reload Window». |
 | `curl 127.0.0.1:8000` отдаёт **403** | Так и должно быть — сервер закрыт токеном. |
-| Опять нужен токен | `docker exec wiki-agent cat /home/agent/.vscodium-server/connection-token` |
+| Опять нужен токен | `docker exec contai cat /home/agent/.vscodium-server/connection-token` |
 | Команда подключения пропала из палитры | Вы уже внутри удалённого окна — подключаться больше не к чему. |

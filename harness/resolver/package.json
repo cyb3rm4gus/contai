@@ -1,7 +1,7 @@
 {
-  "name": "wiki-reh-resolver",
+  "name": "contai-resolver",
   "displayName": "Contained claude for wiki and dev",
-  "description": "Minimal remote authority resolver: points VSCodium at the wiki-agent container's REH server on a loopback port. Zero dependencies.",
+  "description": "Minimal remote authority resolver: points VSCodium at the contai container's REH server on a loopback port. Zero dependencies.",
   "version": "0.0.1",
   "publisher": "local",
   "license": "MIT",
@@ -16,20 +16,20 @@
     "resolvers"
   ],
   "activationEvents": [
-    "onResolveRemoteAuthority:wiki-reh",
-    "onCommand:wikiReh.connect"
+    "onResolveRemoteAuthority:contai-reh",
+    "onCommand:contai.connect"
   ],
   "contributes": {
     "commands": [
       {
-        "command": "wikiReh.connect",
-        "title": "Wiki REH: Connect to Container"
+        "command": "contai.connect",
+        "title": "contai: Connect to Container"
       }
     ],
     "configuration": {
-      "title": "Wiki REH",
+      "title": "contai",
       "properties": {
-        "wikiReh.hosts": {
+        "contai.hosts": {
           "type": "array",
           "default": [],
           "markdownDescription": "REH targets. Each: `{ \"name\", \"host\", \"port\", \"connectionToken\", \"folders\": [{ \"name\", \"path\" }] }`.",
@@ -58,12 +58,12 @@
     "resourceLabelFormatters": [
       {
         "scheme": "vscode-remote",
-        "authority": "wiki-reh+*",
+        "authority": "contai-reh+*",
         "formatting": {
           "label": "${path}",
           "separator": "/",
           "tildify": true,
-          "workspaceSuffix": "wiki-reh"
+          "workspaceSuffix": "contai-reh"
         }
       }
     ]
