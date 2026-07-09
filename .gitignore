@@ -4,15 +4,15 @@ harness/reh/
 # Built resolver VSIX — regenerated deterministically by build-resolver.sh.
 *.vsix
 
-# Obsidian vault app config — the agent never touches it and it is never mounted.
+# Obsidian vault: preserve the folder structure, but never track the app config,
+# the read-only source material (raw/), or generated wiki output (wiki/).
+# templates/ IS tracked. Each kept-but-empty dir holds a .gitkeep.
 obsidian/.obsidian/
-
-# Generated wiki output — track only the directory placeholder.
+obsidian/raw/*
+!obsidian/raw/.gitkeep
 obsidian/wiki/*
 !obsidian/wiki/.gitkeep
 
-# Pulled repositories — mounted whole into the container, not part of this repo.
+# Pulled repositories — mounted whole into the container; keep the dir, ignore contents.
 dev/*
 !dev/.gitkeep
-
-dev/*/**
